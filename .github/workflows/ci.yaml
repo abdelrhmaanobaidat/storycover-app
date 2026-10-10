@@ -1,0 +1,96 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# These are identifiers, not secrets: project, region, registry, CI service account.
+env:
+  REGION: me-central1
+  PROJECT_ID: storycover-dev
+  PROJECT_NUMBER: "87639016657"
+  AR_REPO: storycover
+  IMAGE: storycover-app
+  CONFIG_REPO: abdelrhmaanobaidat/storycover-config
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install .[dev]
+      - run: pytest -q
+
+  build-push:
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write   # mint the OIDC token WIF exchanges for GCP access
+    outputs:
+      image: ${{ steps.meta.outputs.image }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: meta
+        run: echo "image=${REGION}-docker.pkg.dev/${PROJECT_ID}/${AR_REPO}/${IMAGE}:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Build image
+        run: docker build -t "${{ steps.meta.outputs.image }}" .
+
+      - name: Scan image (Trivy)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ steps.meta.outputs.image }}
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+
+      - name: Authenticate to GCP (keyless, WIF)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/${{ env.PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+          service_account: app-ci@${{ env.PROJECT_ID }}.iam.gserviceaccount.com
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Push image
+        run: |
+          gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
+          docker push "${{ steps.meta.outputs.image }}"
+
+  bump-config:
+    needs: build-push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out config repo (dev overlay)
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.CONFIG_REPO }}
+          ref: main
+          token: ${{ secrets.CONFIG_REPO_TOKEN }}
+
+      - name: Install kustomize
+        run: |
+          curl -sfL https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh | bash
+          sudo mv kustomize /usr/local/bin/
+
+      - name: Set image tag in dev overlay
+        working-directory: overlays/dev
+        run: kustomize edit set image ${IMAGE}=${{ needs.build-push.outputs.image }}
+
+      - name: Commit and push
+        run: |
+          git config user.name "storycover-ci"
+          git config user.email "ci@storycover.invalid"
+          git commit -am "deploy ${IMAGE} ${GITHUB_SHA}"
+          git push
