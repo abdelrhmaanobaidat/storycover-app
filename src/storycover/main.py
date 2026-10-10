@@ -2,7 +2,7 @@ import time
 import uuid
 
 from fastapi import FastAPI, Form, HTTPException, Request, UploadFile
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
 
 from . import __version__, gemini, storage
@@ -32,7 +32,7 @@ def healthz():
 
 @app.get("/metrics")
 def metrics():
-    return HTMLResponse(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+    return PlainTextResponse(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
 @app.get("/", response_class=HTMLResponse)

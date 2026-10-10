@@ -48,7 +48,7 @@ jobs:
         run: docker build -t "${{ steps.meta.outputs.image }}" .
 
       - name: Scan image (Trivy)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ steps.meta.outputs.image }}
           severity: HIGH,CRITICAL
@@ -70,6 +70,7 @@ jobs:
 
   bump-config:
     needs: build-push
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - name: Check out config repo (dev overlay)
@@ -92,5 +93,6 @@ jobs:
         run: |
           git config user.name "storycover-ci"
           git config user.email "ci@storycover.invalid"
+          git diff --quiet && echo "tag unchanged, nothing to push" && exit 0
           git commit -am "deploy ${IMAGE} ${GITHUB_SHA}"
           git push

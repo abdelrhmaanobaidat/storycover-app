@@ -21,14 +21,14 @@ storycover-app/
 ## How the secret reaches the app (no secret in Git/image)
 Vault holds the Gemini key. Argo CD applies a `VaultStaticSecret` CR; the **Vault Secrets
 Operator** materialises it as a Kubernetes Secret, which the Deployment exposes to the app
-as `GEMINI_API_KEY`. `config.py` reads that env var — the repo contains no key, only the
+as `GEMINI_API_KEY`. `config.py` reads that env var; the repo contains no key, only the
 reference.
 
 ## CI
 On merge to `main`: run tests, build the image, scan it with Trivy (fails on HIGH/CRITICAL),
 push to Artifact Registry tagged with the immutable git SHA, then bump that tag in
 `storycover-config/overlays/dev`. GCP auth is keyless via Workload Identity Federation
-(`app-ci@storycover-dev`). The only secret the pipeline needs is `CONFIG_REPO_TOKEN` — a
+(`app-ci@storycover-dev`). The only secret the pipeline needs is `CONFIG_REPO_TOKEN`, a
 fine-grained PAT with write access to `storycover-config` for the cross-repo bump.
 
 ## Local development
