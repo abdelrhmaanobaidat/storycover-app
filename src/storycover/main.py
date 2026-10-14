@@ -65,14 +65,90 @@ async def generate(title: str = Form(...), photo: UploadFile = Form(...)):
 
 
 INDEX_HTML = """<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>StoryCover</title>
-<main style="max-width:32rem;margin:4rem auto;font-family:system-ui">
-  <h1>StoryCover</h1>
-  <p>Upload a photo and a story name to generate a book cover.</p>
-  <form method="post" action="/api/generate" enctype="multipart/form-data">
-    <p><input name="title" placeholder="Story name" required></p>
-    <p><input type="file" name="photo" accept="image/*" required></p>
-    <p><button type="submit">Generate cover</button></p>
-  </form>
-</main>
+<style>
+  :root { color-scheme: light dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; display: grid; place-items: center;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: linear-gradient(160deg, #f5f3ff, #eef2ff);
+    color: #1e1b2e; padding: 2rem 1rem;
+  }
+  .card {
+    width: 100%; max-width: 30rem; background: #fff; border-radius: 16px;
+    box-shadow: 0 10px 40px rgba(30, 27, 46, .12); padding: 2rem;
+  }
+  h1 { margin: 0 0 .25rem; font-size: 1.6rem; }
+  p.lead { margin: 0 0 1.5rem; color: #5b5676; }
+  label { display: block; font-size: .85rem; font-weight: 600; margin-bottom: .35rem; }
+  input[type=text], input[type=file] {
+    width: 100%; padding: .6rem .7rem; margin-bottom: 1rem; border: 1px solid #d6d3e6;
+    border-radius: 9px; font-size: 1rem; background: #fbfaff;
+  }
+  button {
+    width: 100%; padding: .7rem; border: 0; border-radius: 9px; background: #6d5efc;
+    color: #fff; font-size: 1rem; font-weight: 600; cursor: pointer;
+  }
+  button:disabled { opacity: .6; cursor: default; }
+  .result { margin-top: 1.5rem; text-align: center; }
+  .result img { width: 100%; border-radius: 12px; box-shadow: 0 6px 24px rgba(30, 27, 46, .18); }
+  .status { margin-top: 1rem; text-align: center; color: #5b5676; }
+  .status.error { color: #c0392b; }
+  a.again { display: inline-block; margin-top: 1rem; color: #6d5efc; }
+</style>
+</head>
+<body>
+  <main class="card">
+    <h1>StoryCover</h1>
+    <p class="lead">Upload a photo and a story name, and a cover is generated for you.</p>
+    <form id="form">
+      <label for="title">Story name</label>
+      <input id="title" name="title" type="text" placeholder="The Brave Little Cat" required>
+      <label for="photo">Photo</label>
+      <input id="photo" name="photo" type="file" accept="image/*" required>
+      <button id="go" type="submit">Generate cover</button>
+    </form>
+    <div id="status" class="status"></div>
+    <div id="result" class="result"></div>
+  </main>
+  <script>
+    const form = document.getElementById('form');
+    const statusEl = document.getElementById('status');
+    const resultEl = document.getElementById('result');
+    const go = document.getElementById('go');
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      resultEl.innerHTML = '';
+      statusEl.className = 'status';
+      statusEl.textContent = 'Generating your cover, this can take a few seconds.';
+      go.disabled = true;
+      try {
+        const res = await fetch('/api/generate', { method: 'POST', body: new FormData(form) });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Something went wrong');
+        statusEl.textContent = '';
+        const img = document.createElement('img');
+        img.alt = data.title;
+        img.src = data.url;
+        const again = document.createElement('a');
+        again.className = 'again';
+        again.href = '#';
+        again.textContent = 'Make another';
+        again.onclick = () => { location.reload(); return false; };
+        resultEl.append(img, again);
+      } catch (err) {
+        statusEl.className = 'status error';
+        statusEl.textContent = err.message;
+      } finally {
+        go.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
 """
